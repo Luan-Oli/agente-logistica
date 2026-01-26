@@ -1,59 +1,81 @@
 import streamlit as st
 import pandas as pd
 import time
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from geopy.geocoders import Nominatim
+from geopy.distance import geodesic
 from datetime import datetime
 
-# Configuração visual da página
-st.set_page_config(page_title="Agente de Logística SENAI", page_icon="🤖", layout="wide")
+# --- CONFIGURAÇÃO DA PÁGINA ---
+st.set_page_config(page_title="SENAI - Agente Logística Cloud", page_icon="🤖", layout="wide")
 
-st.title("🤖 Painel de Controle: Agente de Logística")
-st.markdown("---")
+# --- 1. CONFIGURAÇÕES CRÍTICAS (NUVEM) ---
+# Substitua pelo link de "Download Direto" do seu arquivo no OneDrive/SharePoint
+URL_CSV_NUVEM = "COLE_AQUI_O_LINK_DO_SEU_CSV" 
 
-# Colunas para organizar o layout
-col1, col2 = st.columns([1, 3])
+# --- 2. FUNÇÃO: ENVIAR E-MAIL VIA SMTP (SEM OUTLOOK LOCAL) ---
+def enviar_email_cloud(vencedor, cliente, cidade):
+    try:
+        # Puxa as credenciais seguras das configurações do Streamlit
+        email_user = st.secrets["EMAIL_USER"]
+        email_pass = st.secrets["EMAIL_PASS"]
+        
+        msg = MIMEMultipart()
+        msg['From'] = email_user
+        msg['To'] = "luan.oliveira@senairs.org.br"
+        msg['Subject'] = f"✅ Consultor Alocado: {cliente}"
+        
+        corpo = f"O Agente Cloud selecionou {vencedor['Consultor']} para {cliente} em {cidade}."
+        msg.attach(MIMEText(corpo, 'plain'))
+        
+        server = smtplib.SMTP('smtp.office365.com', 587)
+        server.starttls()
+        server.login(email_user, email_pass)
+        server.send_message(msg)
+        server.quit()
+        return True
+    except Exception as e:
+        st.error(f"Falha no e-mail: {e}")
+        return False
 
-with col1:
+# --- 3. INTERFACE E LÓGICA ---
+st.title("🤖 Agente de Logística SENAI - Operação Cloud")
+
+if 'rodando' not in st.session_state:
+    st.session_state.rodando = False
+
+with st.sidebar:
     st.header("Controle")
-    # Estado do Robô (Salvo na sessão do navegador)
-    if 'robo_ativo' not in st.session_state:
-        st.session_state.robo_ativo = False
-
-    def alternar_robo():
-        st.session_state.robo_ativo = not st.session_state.robo_ativo
-
-    st.button(
-        "LIGAR AGENTE" if not st.session_state.robo_ativo else "DESLIGAR AGENTE", 
-        on_click=alternar_robo,
-        type="primary" if not st.session_state.robo_ativo else "secondary"
-    )
-
-    status = "🟢 OPERANDO" if st.session_state.robo_ativo else "🔴 EM REPOUSO"
+    if st.button("LIGAR AGENTE" if not st.session_state.rodando else "DESLIGAR AGENTE"):
+        st.session_state.rodando = not st.session_state.rodando
+    
+    status = "🟢 ATIVO" if st.session_state.rodando else "🔴 DESATIVADO"
     st.subheader(f"Status: {status}")
-    
-    st.info("O robô processa automaticamente as demandas vindas do Power Automate.")
 
-with col2:
-    st.header("Monitor de Atividades (Tempo Real)")
+if st.session_state.rodando:
+    st.info("👁️ Monitorando base de dados via link de nuvem...")
     
-    # Simulação de Logs (Isso será conectado à sua lógica de cálculo)
-    log_container = st.container(border=True)
-    
-    if st.session_state.robo_ativo:
-        with log_container:
-            st.write(f"⏱️ {datetime.now().strftime('%H:%M:%S')} - Agente ativado. Vigiando base de dados...")
-            # Aqui mostraremos os últimos resultados, como o caso da Fernanda Machado
-            st.success("✅ Última alocação: Fernanda Machado | Destino: Encantado | 35.5 km")
-    else:
-        log_container.write("💤 Sistema pausado pelo coordenador.")
+    try:
+        # Lê o CSV diretamente da internet
+        df = pd.read_csv(URL_CSV_NUVEM)
+        
+        # Lógica de Geolocalização (Mesma da V7.0)
+        geolocator = Nominatim(user_agent="agente_senai_cloud_v1", timeout=20)
+        cidade_alvo = str(df.iloc[0]['Cidade_Demanda']).strip()
+        cliente = str(df.iloc[0]['Empresa']).strip()
+        
+        st.write(f"📍 Processando demanda para: **{cliente}** em **{cidade_alvo}**")
+        
+        # (O restante da lógica de cálculo de KM entra aqui...)
+        # Para testes, vamos simular a conclusão:
+        if st.button("Simular Processamento"):
+            enviar_email_cloud({'Consultor': 'Fernanda Machado'}, cliente, cidade_alvo)
+            st.success("✅ Processado com sucesso na nuvem!")
 
-# Área de Histórico (Visualização rápida para todos)
-st.markdown("---")
-st.header("📊 Histórico Recente")
-# Exemplo de como os dados aparecerão para todos
-dados_exemplo = pd.DataFrame({
-    'Data': ['26/01/2026', '25/01/2026'],
-    'Cliente': ['RAQUEL', 'EMPRESA TESTE'],
-    'Consultor': ['Fernanda Machado', 'João Silva'],
-    'KM': [35.5, 12.2]
-})
-st.table(dados_exemplo)
+    except Exception as e:
+        st.error(f"Aguardando arquivo válido: {e}")
+    
+    time.sleep(30)
+    st.rerun()

@@ -1,3 +1,4 @@
 pandas
 geopy
 streamlit
+altair

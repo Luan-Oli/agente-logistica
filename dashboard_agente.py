@@ -6,19 +6,17 @@ from datetime import datetime
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
 
-# --- CONFIGURAÇÃO DA PÁGINA ---
+# --- 1. CONFIGURAÇÃO DA PÁGINA (Sempre primeiro) ---
 st.set_page_config(page_title="Agente de Logística SENAI", page_icon="🤖", layout="wide")
 
-# --- CONFIGURAÇÕES DE CAMINHOS (ONEDRIVE LOCAL) ---
-# Caminhos baseados na estrutura de pastas detectada
+# --- 2. DEFINIÇÃO DE VARIÁVEIS (Para evitar o NameError) ---
 PASTA_AUTO = r"C:\Users\luan.oliveira\OneDrive - SISTEMA FIERGS\Automação"
 ARQUIVO_ENTRADA = os.path.join(PASTA_AUTO, "ponte_dados.csv")
 ARQUIVO_HISTORICO = os.path.join(PASTA_AUTO, "historico_alocacoes.csv")
 ARQUIVO_RESULTADO = os.path.join(PASTA_AUTO, "resultado_alocacao.csv")
 
-# --- FUNÇÕES DE APOIO ---
+# --- 3. FUNÇÕES DE APOIO ---
 def registrar_historico(vencedor, cliente, cidade):
-    """Salva a alocação no arquivo de histórico permanente."""
     dados = {
         'Data': [datetime.now().strftime('%d/%m/%Y %H:%M')],
         'Cliente': [cliente],
@@ -30,7 +28,6 @@ def registrar_historico(vencedor, cliente, cidade):
     df_h.to_csv(ARQUIVO_HISTORICO, mode='a', index=False, header=header, encoding='utf-8-sig')
 
 def gerar_saida_power_automate(vencedor, cliente, cidade):
-    """Gera o CSV que servirá de gatilho para o e-mail no Power Automate."""
     resultado = {
         'Consultor': [vencedor['Consultor']],
         'Cliente': [cliente],
@@ -41,48 +38,34 @@ def gerar_saida_power_automate(vencedor, cliente, cidade):
     pd.DataFrame(resultado).to_csv(ARQUIVO_RESULTADO, index=False, encoding='utf-8-sig')
 
 def processar_logistica():
-    """O 'Cérebro' do robô: calcula distâncias e seleciona o consultor."""
     st.toast("⚡ Nova demanda detectada! Iniciando cálculos...")
-    time.sleep(10) # Tempo para o OneDrive sincronizar o download
-
+    time.sleep(5) 
     try:
         df = pd.read_csv(ARQUIVO_ENTRADA)
         geolocator = Nominatim(user_agent="agente_senai_v8", timeout=20)
-        
         cidade_alvo = str(df.iloc[0]['Cidade_Demanda']).strip()
         cliente = str(df.iloc[0]['Empresa']).strip()
         coord_dest = geolocator.geocode(f"{cidade_alvo}, RS, Brasil")
         
-        if not coord_dest:
-            st.error(f"❌ Não foi possível localizar a cidade: {cidade_alvo}")
-            return
-
         def calc_km(row):
-            time.sleep(1) # Respeita o limite do servidor de mapas
+            time.sleep(1)
             loc = geolocator.geocode(f"{row['Unidade']}, RS, Brasil")
             return geodesic((coord_dest.latitude, coord_dest.longitude), (loc.latitude, loc.longitude)).km if loc else 9999
 
         df['Distancia_KM'] = df.apply(calc_km, axis=1)
-        # Lógica: 160h mensais menos as horas já ocupadas
         df['Folga_Real'] = 160 - pd.to_numeric(df['Horas_Mes'], errors='coerce').fillna(160)
-        
-        # Critério: Menor distância e, em caso de empate, maior folga
         vencedor = df.sort_values(by=['Distancia_KM', 'Folga_Real'], ascending=[True, False]).iloc[0]
         
-        # Ações Finais
         registrar_historico(vencedor, cliente, cidade_alvo)
         gerar_saida_power_automate(vencedor, cliente, cidade_alvo)
-        
-        st.success(f"🏆 Sucesso! {vencedor['Consultor']} alocado para {cliente}.")
         return True
     except Exception as e:
         st.error(f"❌ Erro no processamento: {e}")
         return False
 
-# --- INTERFACE STREAMLIT ---
+# --- 4. INTERFACE DO DASHBOARD ---
 st.title("🤖 Painel de Controle: Agente de Logística")
-st.markdown(f"**Vigiando pasta:** `{PASTA_AUTO}`")
-st.markdown("---")
+st.markdown(f"**Vigiando pasta:** `{PASTA_AUTO}`") # Agora PASTA_AUTO já foi definida acima!
 
 if 'rodando' not in st.session_state:
     st.session_state.rodando = False
@@ -91,28 +74,40 @@ if 'ultima_mod' not in st.session_state:
 
 with st.sidebar:
     st.header("⚙️ Configurações")
-    if st.button("LIGAR AGENTE" if not st.session_state.rodando else "DESLIGAR AGENTE", type="primary"):
+    if st.button("LIGAR" if not st.session_state.rodando else "DESLIGAR", type="primary", use_container_width=True):
         st.session_state.rodando = not st.session_state.rodando
+        st.rerun()
     
     status_cor = "green" if st.session_state.rodando else "red"
     st.markdown(f"### Status: :{status_cor}[{'ATIVO' if st.session_state.rodando else 'DESATIVADO'}]")
 
-# Lógica de Monitoramento (Polling)
+status_msg = st.empty()
+log_msg = st.empty()
+
 if st.session_state.rodando:
+    status_msg.info("👁️ O Agente está monitorando mudanças no OneDrive...")
     if os.path.exists(ARQUIVO_ENTRADA):
         mod_atual = os.path.getmtime(ARQUIVO_ENTRADA)
-        
+        log_msg.caption(f"Última verificação: {datetime.now().strftime('%H:%M:%S')}")
         if mod_atual != st.session_state.ultima_mod:
-            if processar_logistica():
-                st.session_state.ultima_mod = mod_atual
-    
-    time.sleep(10)
+            with st.spinner("📦 Processando nova demanda..."):
+                if processar_logistica():
+                    st.session_state.ultima_mod = mod_atual
+                    st.success("✅ Alocação concluída e e-mail disparado via Power Automate!")
+                    st.balloons()
+    time.sleep(5)
     st.rerun()
+else:
+    status_msg.warning("💤 O Agente está pausado. Ligue-o para iniciar.")
 
-# Exibição do Histórico
-st.subheader("📊 Últimas Alocações Registradas")
+st.markdown("---")
+st.subheader("📊 Histórico de Alocações")
 if os.path.exists(ARQUIVO_HISTORICO):
-    df_visualizacao = pd.read_csv(ARQUIVO_HISTORICO)
-    st.dataframe(df_visualizacao.tail(10), use_container_width=True)
+    try:
+        # Adicionamos 'on_bad_lines' para ignorar linhas com erro em vez de travar o site
+        df_hist = pd.read_csv(ARQUIVO_HISTORICO, on_bad_lines='skip', encoding='utf-8-sig')
+        st.dataframe(df_hist.tail(10), use_container_width=True)
+    except Exception as e:
+        st.warning("⚠️ O arquivo de histórico está sendo atualizado ou contém erros de formatação.")
 else:
     st.info("Aguardando a primeira alocação para gerar o histórico.")

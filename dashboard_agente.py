@@ -54,3 +54,4 @@ try:
     st.dataframe(preview)
 except:
     st.caption("Sincronizando dados...")
+

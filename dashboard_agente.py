@@ -47,3 +47,4 @@ try:
     st.dataframe(pd.read_csv(URL_CSV, encoding='latin1', on_bad_lines='skip'), use_container_width=True)
 except:
     st.caption("Sincronizando dados...")
+

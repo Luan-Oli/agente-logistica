@@ -8,7 +8,8 @@ st.set_page_config(page_title="Agente Logística SENAI", layout="wide")
 st.title("🤖 Agente de Logística SENAI")
 
 # Link estável do SharePoint
-URL_CSV = "https://sesirs-my.sharepoint.com/:x:/g/personal/luan_oliveira_senairs_org_br/Documents/Automa%C3%A7%C3%A3o/ponte_dados.csv?download=1"
+# Este link é público e não exige senha, ideal para testarmos a lógica agora
+URL_CSV = "https://raw.githubusercontent.com/luan-oli/agente-logistica/main/ponte_dados.csv"
 
 def processar():
     st.info("⚡ Sincronizando com SharePoint...")
@@ -47,4 +48,5 @@ try:
     st.dataframe(pd.read_csv(URL_CSV, encoding='latin1', on_bad_lines='skip'), use_container_width=True)
 except:
     st.caption("Sincronizando dados...")
+
 

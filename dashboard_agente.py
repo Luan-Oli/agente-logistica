@@ -9,7 +9,7 @@ st.set_page_config(page_title="Agente Logística SENAI", layout="wide")
 st.title("🤖 Agente de Logística SENAI")
 
 # Link RAW do seu GitHub (O link que você já está usando e que funcionou na tabela!)
-URL_CSV = "https://raw.githubusercontent.com/luan-oli/agente-logistica/main/ponte_dados.csv"
+URL_CSV = "https://raw.githubusercontent.com/Luan-Oli/ponte_dados.csv/refs/heads/main/ponte_dados.csv"
 
 def processar():
     st.info("⚡ Iniciando geolocalização...")
@@ -54,3 +54,4 @@ try:
     st.dataframe(preview, use_container_width=True)
 except:
     st.caption("Sincronizando dados...")
+

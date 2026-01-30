@@ -1,4 +1,8 @@
+streamlit
 pandas
 geopy
-streamlit>=1.22.0
-altair<5
+folium
+streamlit-folium
+requests
+openpyxl
+watchdog

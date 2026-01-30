@@ -1,0 +1,43 @@
+name: Robô de Logística 🤖
+
+on:
+  schedule:
+    - cron: '*/30 * * * *' # Roda a cada 30 minutos
+  workflow_dispatch: # Permite rodar manualmente clicando num botão
+
+jobs:
+  atualizar-excel:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Baixar Código
+        uses: actions/checkout@v4
+
+      - name: 🐍 Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: 📦 Instalar Bibliotecas
+        run: pip install pandas openpyxl imap-tools
+
+      - name: 📧 Rodar Robô de Email
+        env:
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+        run: python atualizar_dados.py
+
+      - name: 💾 Salvar e Enviar (Commit)
+        run: |
+          git config --global user.name 'Robô Logística'
+          git config --global user.email 'robo@logistica.com'
+          
+          # Se o arquivo mudou, faz o commit
+          if [[ -n $(git status -s dados_atualizados.xlsx) ]]; then
+            git add dados_atualizados.xlsx
+            git commit -m "📈 Dados atualizados via E-mail Automaticamente"
+            git push
+            echo "🚀 Novos dados enviados para o Streamlit!"
+          else
+            echo "💤 Nenhuma mudança nos dados."
+          fi
